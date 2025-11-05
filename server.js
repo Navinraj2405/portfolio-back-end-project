@@ -5,21 +5,6 @@ const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
-const admin = require("firebase-admin");
-
-// -------------------- FIREBASE ADMIN SETUP --------------------
-let serviceAccount;
-try {
-  // Load from Render environment variable
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-} catch (err) {
-  console.error("❌ Firebase service account not found or invalid.");
-  process.exit(1);
-}
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
 
 // -------------------- CONFIG --------------------
 const app = express();
@@ -32,7 +17,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------- MONGODB CONNECTION --------------------
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/portfolioDB", {
+  .connect("mongodb://127.0.0.1:27017/portfolioDB", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
@@ -47,6 +32,7 @@ const projectSchema = new mongoose.Schema({
   liveLink: String,
   image: String,
 });
+
 const Project = mongoose.model("Project", projectSchema);
 
 const resumeSchema = new mongoose.Schema({
@@ -54,6 +40,7 @@ const resumeSchema = new mongoose.Schema({
   filePath: String,
   uploadedAt: { type: Date, default: Date.now },
 });
+
 const Resume = mongoose.model("Resume", resumeSchema);
 
 // -------------------- MULTER SETUP --------------------
@@ -64,42 +51,22 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadFolder),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
+
 const upload = multer({ storage });
-
-// -------------------- MIDDLEWARE: VERIFY ADMIN --------------------
-const ADMIN_UID = "JVo2DR6keLQlWwLWGPCidwcIFaC3";
-
-const verifyAdmin = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader)
-    return res.status(401).json({ error: "No authorization token provided" });
-
-  const token = authHeader.split(" ")[1];
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    if (decoded.uid !== ADMIN_UID)
-      return res.status(403).json({ error: "Access denied: Not admin" });
-
-    req.user = decoded;
-    next();
-  } catch (error) {
-    console.error("Token verification failed:", error);
-    return res.status(401).json({ error: "Invalid token" });
-  }
-};
 
 // -------------------- ROUTES --------------------
 
 // ✅ Test route
 app.get("/", (req, res) => {
-  res.send("Welcome to Navinraj's Portfolio API 🚀");
+  res.send("Welcome to Navinraj's Portfolio API 🚀 (No Firebase)");
 });
 
-// ✅ Add new project (Admin only)
-app.post("/api/projects", verifyAdmin, upload.single("image"), async (req, res) => {
+// ✅ Add new project
+app.post("/api/projects", upload.single("image"), async (req, res) => {
   try {
     const { title, description, githubLink, liveLink } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : "";
+
     const newProject = new Project({
       title,
       description,
@@ -107,6 +74,7 @@ app.post("/api/projects", verifyAdmin, upload.single("image"), async (req, res) 
       liveLink,
       image,
     });
+
     await newProject.save();
     res.status(201).json({ message: "✅ Project added successfully!" });
   } catch (err) {
@@ -115,7 +83,7 @@ app.post("/api/projects", verifyAdmin, upload.single("image"), async (req, res) 
   }
 });
 
-// ✅ Get all projects (Public)
+// ✅ Get all projects
 app.get("/api/projects", async (req, res) => {
   try {
     const projects = await Project.find().sort({ _id: -1 });
@@ -126,11 +94,12 @@ app.get("/api/projects", async (req, res) => {
   }
 });
 
-// ✅ Upload resume (Admin only)
-app.post("/api/resume", verifyAdmin, upload.single("resume"), async (req, res) => {
+// ✅ Upload resume
+app.post("/api/resume", upload.single("resume"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
+    // Delete old resume if exists
     const oldResume = await Resume.findOne();
     if (oldResume) {
       const oldPath = path.join(__dirname, oldResume.filePath);
@@ -143,6 +112,7 @@ app.post("/api/resume", verifyAdmin, upload.single("resume"), async (req, res) =
       fileName: req.file.originalname,
       filePath: resumePath,
     });
+
     await newResume.save();
     res
       .status(200)
@@ -153,7 +123,7 @@ app.post("/api/resume", verifyAdmin, upload.single("resume"), async (req, res) =
   }
 });
 
-// ✅ Get resume (Public)
+// ✅ Get latest resume
 app.get("/api/resume", async (req, res) => {
   try {
     const resume = await Resume.findOne().sort({ uploadedAt: -1 });
