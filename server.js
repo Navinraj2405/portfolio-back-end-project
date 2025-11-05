@@ -8,14 +8,22 @@ const fs = require("fs");
 const admin = require("firebase-admin");
 
 // -------------------- FIREBASE ADMIN SETUP --------------------
-const serviceAccount = require("./firebase-admin-key.json"); // You’ll create this file below
+let serviceAccount;
+try {
+  // Load from Render environment variable
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+} catch (err) {
+  console.error("❌ Firebase service account not found or invalid.");
+  process.exit(1);
+}
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
 // -------------------- CONFIG --------------------
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
@@ -24,7 +32,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------- MONGODB CONNECTION --------------------
 mongoose
-  .connect("mongodb://127.0.0.1:27017/portfolioDB", {
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/portfolioDB", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
@@ -92,7 +100,6 @@ app.post("/api/projects", verifyAdmin, upload.single("image"), async (req, res) 
   try {
     const { title, description, githubLink, liveLink } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : "";
-
     const newProject = new Project({
       title,
       description,
@@ -100,7 +107,6 @@ app.post("/api/projects", verifyAdmin, upload.single("image"), async (req, res) 
       liveLink,
       image,
     });
-
     await newProject.save();
     res.status(201).json({ message: "✅ Project added successfully!" });
   } catch (err) {
@@ -125,7 +131,6 @@ app.post("/api/resume", verifyAdmin, upload.single("resume"), async (req, res) =
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Delete old resume
     const oldResume = await Resume.findOne();
     if (oldResume) {
       const oldPath = path.join(__dirname, oldResume.filePath);
@@ -139,8 +144,9 @@ app.post("/api/resume", verifyAdmin, upload.single("resume"), async (req, res) =
       filePath: resumePath,
     });
     await newResume.save();
-
-    res.status(200).json({ message: "✅ Resume uploaded successfully!", filePath: resumePath });
+    res
+      .status(200)
+      .json({ message: "✅ Resume uploaded successfully!", filePath: resumePath });
   } catch (err) {
     console.error("❌ Error uploading resume:", err);
     res.status(500).json({ error: "Server error while uploading resume" });
@@ -160,4 +166,6 @@ app.get("/api/resume", async (req, res) => {
 });
 
 // -------------------- START SERVER --------------------
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Server running at http://localhost:${PORT}`)
+);
