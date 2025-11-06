@@ -5,6 +5,7 @@ const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+require("dotenv").config();
 
 // -------------------- CONFIG --------------------
 const app = express();
@@ -16,11 +17,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------- MONGODB CONNECTION --------------------
-mongoose
-  .connect("mongodb://127.0.0.1:27017/portfolioDB", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+mongoose.connect(process.env.MONGO_URI || "mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB", {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 
@@ -32,7 +32,6 @@ const projectSchema = new mongoose.Schema({
   liveLink: String,
   image: String,
 });
-
 const Project = mongoose.model("Project", projectSchema);
 
 const resumeSchema = new mongoose.Schema({
@@ -40,7 +39,6 @@ const resumeSchema = new mongoose.Schema({
   filePath: String,
   uploadedAt: { type: Date, default: Date.now },
 });
-
 const Resume = mongoose.model("Resume", resumeSchema);
 
 // -------------------- MULTER SETUP --------------------
@@ -51,7 +49,6 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadFolder),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
-
 const upload = multer({ storage });
 
 // -------------------- ROUTES --------------------
@@ -66,15 +63,7 @@ app.post("/api/projects", upload.single("image"), async (req, res) => {
   try {
     const { title, description, githubLink, liveLink } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : "";
-
-    const newProject = new Project({
-      title,
-      description,
-      githubLink,
-      liveLink,
-      image,
-    });
-
+    const newProject = new Project({ title, description, githubLink, liveLink, image });
     await newProject.save();
     res.status(201).json({ message: "✅ Project added successfully!" });
   } catch (err) {
@@ -99,7 +88,6 @@ app.post("/api/resume", upload.single("resume"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Delete old resume if exists
     const oldResume = await Resume.findOne();
     if (oldResume) {
       const oldPath = path.join(__dirname, oldResume.filePath);
@@ -112,11 +100,12 @@ app.post("/api/resume", upload.single("resume"), async (req, res) => {
       fileName: req.file.originalname,
       filePath: resumePath,
     });
-
     await newResume.save();
-    res
-      .status(200)
-      .json({ message: "✅ Resume uploaded successfully!", filePath: resumePath });
+
+    res.status(200).json({
+      message: "✅ Resume uploaded successfully!",
+      filePath: resumePath,
+    });
   } catch (err) {
     console.error("❌ Error uploading resume:", err);
     res.status(500).json({ error: "Server error while uploading resume" });
