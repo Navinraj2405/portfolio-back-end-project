@@ -11,16 +11,45 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// ✅ Allow both local & deployed frontends
+const allowedOrigins = [
+  "http://localhost:5174", // local frontend
+  "https://your-frontend-deployed-url.vercel.app", // replace with your real frontend deploy URL
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+// ✅ Fix for preflight (OPTIONS) requests
+app.options("*", cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ Serve uploads folder correctly on Render
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------- MONGODB CONNECTION --------------------
-mongoose.connect(process.env.MONGO_URI || "mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB", {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose
+  .connect(
+    process.env.MONGO_URI ||
+      "mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB",
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    }
+  )
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 
@@ -63,7 +92,13 @@ app.post("/api/projects", upload.single("image"), async (req, res) => {
   try {
     const { title, description, githubLink, liveLink } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : "";
-    const newProject = new Project({ title, description, githubLink, liveLink, image });
+    const newProject = new Project({
+      title,
+      description,
+      githubLink,
+      liveLink,
+      image,
+    });
     await newProject.save();
     res.status(201).json({ message: "✅ Project added successfully!" });
   } catch (err) {
@@ -125,4 +160,6 @@ app.get("/api/resume", async (req, res) => {
 });
 
 // -------------------- START SERVER --------------------
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Server running at http://localhost:${PORT}`)
+);
