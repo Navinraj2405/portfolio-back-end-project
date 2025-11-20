@@ -13,7 +13,7 @@ const PORT = 5000; // You can change this if needed
 // ✅ Allow both local & deployed frontends
 const allowedOrigins = [
   "http://localhost:5173", // local frontend
-  "https://navinraj.netlify.app/", // replace with your real frontend deploy URL
+  "https://navinraj.netlify.app", // replace with your real frontend deploy URL
 ];
 
 app.use(
