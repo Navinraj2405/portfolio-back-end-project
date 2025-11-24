@@ -8,16 +8,23 @@ const fs = require("fs");
 
 // -------------------- CONFIG --------------------
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 
+// Allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://navinraj.netlify.app",
+  "https://navinraj.netlify.app"
 ];
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
@@ -27,52 +34,54 @@ app.options("/*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// -------------------- FIX FOR RENDER --------------------
+// -------------------- FIX: RENDER PERSISTENT UPLOAD PATH --------------------
 const uploadFolder = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadFolder)) fs.mkdirSync(uploadFolder);
 
 // Serve uploads
 app.use("/uploads", express.static(uploadFolder));
 
-// -------------------- MONGODB --------------------
+// -------------------- MONGODB CONNECTION --------------------
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb+srv://...")
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error(err));
+  .connect("mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB?appName=Cluster0")
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
+  .catch((err) => console.error("❌ MongoDB Error:", err));
 
-// -------------------- MULTER SETUP --------------------
+// -------------------- MODELS --------------------
+const projectSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  githubLink: String,
+  liveLink: String,
+  image: String,
+});
+
+const Project = mongoose.model("Project", projectSchema);
+
+const resumeSchema = new mongoose.Schema({
+  fileName: String,
+  filePath: String,
+  uploadedAt: { type: Date, default: Date.now },
+});
+
+const Resume = mongoose.model("Resume", resumeSchema);
+
+// -------------------- MULTER --------------------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadFolder),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 
 const upload = multer({ storage });
 
-// -------------------- MODELS --------------------
-const Project = mongoose.model(
-  "Project",
-  new mongoose.Schema({
-    title: String,
-    description: String,
-    githubLink: String,
-    liveLink: String,
-    image: String,
-  })
-);
-
-const Resume = mongoose.model(
-  "Resume",
-  new mongoose.Schema({
-    fileName: String,
-    filePath: String,
-    uploadedAt: { type: Date, default: Date.now },
-  })
-);
-
 // -------------------- ROUTES --------------------
 
-// Add Project
+// Home
+app.get("/", (req, res) => {
+  res.send("🚀 Portfolio Backend Running Successfully!");
+});
+
+// -------------------- ADD PROJECT --------------------
 app.post("/api/projects", upload.single("image"), async (req, res) => {
   try {
     const image = req.file ? `/uploads/${req.file.filename}` : "";
@@ -83,42 +92,65 @@ app.post("/api/projects", upload.single("image"), async (req, res) => {
     });
 
     await newProject.save();
-    res.json({ message: "Project added successfully!" });
+
+    res.status(201).json({ message: "✅ Project added successfully!" });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("❌ Error adding project:", err);
+    res.status(500).json({ error: "Server error while adding project." });
   }
 });
 
-// Get Projects
+// -------------------- GET ALL PROJECTS --------------------
 app.get("/api/projects", async (req, res) => {
-  const projects = await Project.find().sort({ _id: -1 });
-  res.json(projects);
+  try {
+    const projects = await Project.find().sort({ _id: -1 });
+    res.status(200).json(projects);
+  } catch (err) {
+    console.error("❌ Error fetching projects:", err);
+    res.status(500).json({ error: "Server error while fetching projects." });
+  }
 });
 
-// Upload Resume
+// -------------------- UPLOAD RESUME --------------------
 app.post("/api/resume", upload.single("resume"), async (req, res) => {
   try {
-    const resumePath = `/uploads/${req.file.filename}`;
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     await Resume.deleteMany({});
-    const newResume = await Resume.create({
+
+    const resumePath = `/uploads/${req.file.filename}`;
+
+    const newResume = new Resume({
       fileName: req.file.originalname,
       filePath: resumePath,
     });
 
-    res.json({ message: "Resume uploaded!", filePath: resumePath });
+    await newResume.save();
+
+    res.status(200).json({
+      message: "✅ Resume uploaded successfully!",
+      filePath: resumePath,
+    });
   } catch (err) {
-    res.status(500).json("Error uploading resume");
+    console.error("❌ Error uploading resume:", err);
+    res.status(500).json({ error: "Server error while uploading resume" });
   }
 });
 
-// Get Resume
+// -------------------- GET LATEST RESUME --------------------
 app.get("/api/resume", async (req, res) => {
-  const resume = await Resume.findOne().sort({ uploadedAt: -1 });
-  if (!resume) return res.status(404).json({ msg: "No resume found" });
-  res.json(resume);
+  try {
+    const resume = await Resume.findOne().sort({ uploadedAt: -1 });
+    if (!resume) return res.status(404).json({ message: "No resume found" });
+
+    res.status(200).json(resume);
+  } catch (err) {
+    console.error("❌ Error fetching resume:", err);
+    res.status(500).json({ error: "Server error while fetching resume" });
+  }
 });
 
-// -------------------- START SERVER --------------------
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// -------------------- START --------------------
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on http://localhost:${PORT}`)
+);
