@@ -13,9 +13,10 @@ const PORT = 5000;
 // Allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://navinraj.netlify.app"
+  "https://navinraj.netlify.app",
 ];
 
+// CORS FIX
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -29,21 +30,20 @@ app.use(
   })
 );
 
-app.options("/*", cors());
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// -------------------- FIX: RENDER PERSISTENT UPLOAD PATH --------------------
+// -------------------- UPLOADS FOLDER --------------------
 const uploadFolder = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadFolder)) fs.mkdirSync(uploadFolder);
 
-// Serve uploads
 app.use("/uploads", express.static(uploadFolder));
 
 // -------------------- MONGODB CONNECTION --------------------
 mongoose
-  .connect("mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB?appName=Cluster0")
+  .connect(
+    "mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB?appName=Cluster0"
+  )
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
@@ -75,8 +75,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // -------------------- ROUTES --------------------
-
-// Home
 app.get("/", (req, res) => {
   res.send("🚀 Portfolio Backend Running Successfully!");
 });
@@ -87,7 +85,10 @@ app.post("/api/projects", upload.single("image"), async (req, res) => {
     const image = req.file ? `/uploads/${req.file.filename}` : "";
 
     const newProject = new Project({
-      ...req.body,
+      title: req.body.title,
+      description: req.body.description,
+      githubLink: req.body.githubLink,
+      liveLink: req.body.liveLink,
       image,
     });
 
@@ -150,7 +151,7 @@ app.get("/api/resume", async (req, res) => {
   }
 });
 
-// -------------------- START --------------------
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-);
+// -------------------- START SERVER --------------------
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
