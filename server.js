@@ -42,7 +42,7 @@ app.use("/uploads", express.static(uploadFolder));
 // -------------------- MONGODB CONNECTION --------------------
 mongoose
   .connect(
-    "mongodb+srv://navinraj:Atna001@cluster0.grgh9ma.mongodb.net/portfolioDB?appName=Cluster0"
+    "mongodb+srv://navinraj:1478963@cluster0.grgh9ma.mongodb.net/portfolioDB?appName=Cluster0"
   )
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Error:", err));
